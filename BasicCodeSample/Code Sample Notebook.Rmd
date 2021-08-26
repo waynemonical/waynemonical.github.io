@@ -9,7 +9,7 @@ output: html_document
 ### Part 1: Data Cleaning and Correcting
 
 
-```{r}
+```{r, message = FALSE, warning=FALSE}
 library(dplyr)
 
 # data load
