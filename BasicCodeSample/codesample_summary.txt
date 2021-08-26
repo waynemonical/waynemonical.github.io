@@ -1,0 +1,12 @@
+
+### Code Sample OVerview
+##  3/4/2021
+#   Wayne Monical
+
+The first part of this code sample consists of the data cleaning of a medium-sized data frame of stock market information from September of 2007 to December of 2012. The second part of the code sample builds a nearest neighbor prediction function. This function is used in the third part of this code sample, which consists of graphing and analyzing a simple nearest neighbor fit for a small subset of the cleaned stock data. 
+
+In the data frame, each row consists of the price of one stock on one day. The raw data set has the obvious issues of a concatenated numerical date format and an inconsistency in the date range of each stock. Finally, on close inspection, the problem of mis-entered data presents itself. To start off, the concatenated date format of 'YYYYMMDD' will be interpreted naively by data frame functions as a numeric vector of large integers. This presents problems for analysis and graphing, so I've changed the date value to a count of days since an arbitrary start point to achieve a correct numerical interpretation. Graphing the relative frequency of the occurence of each stock in the data frame, it becomes obvious as to what subset of dates and stocks to choose in order to have the largest and most consistent data set. Finally, a quick look at the summary statistics of the stock prices reveals the existence of negative stock values. Graphing the prices of the culprits, it becomes clear that we have the correct numbers, only negative. 
+
+The nearest neighbor prediction function predicts the y-value of some new x-value by finding the k closest data points to x, and averaging their y-values. Its wrapper, the apply prediction function, performs the same task on a sequence of x-values. 
+
+I divided the cleaned data into a small training set (n = 35) and kept the rest as a test set. I applied the nearest neighbor function to the training data of the FLT stock, and I generated predictions for each date interior to the data set. I then graphed this prediction along with the training data in base R and in the ggplot2 package, and I generated predictions for four more stocks. Finally, I graphed the test data of the five stocks and their nearest neighbor predictions together. To calculate prediction error on the test set, I took the mean of the absolute value between the data and the prediction. I printed the results for each of the five stocks in a small table, along with their expected errors on the training data.

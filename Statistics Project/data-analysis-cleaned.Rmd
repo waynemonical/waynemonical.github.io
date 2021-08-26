@@ -1,0 +1,496 @@
+---
+title: "Data Analysis Project"
+author: "Wayne Monical"
+date: "December 10, 2019"
+output: pdf_document
+---
+
+```{r, results = "hide", include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(car)
+library(leaps)
+library(glmnet)
+load("C:/Users/Wayne Monical/Documents/fall-19/Linear Models/data-analysis/baseball2012.rda")
+```
+
+
+\newpage
+
+
+Cleaning this data by omitting the rows where there's no entry for salary
+```{r}
+## removing the empty salary positions
+baseball_df <- as.data.frame(baseball)
+
+baseball_df <- filter(baseball_df, !is.na(salary))
+summary(baseball_df$salary)
+```
+
+\newpage
+
+#### Auxillary Variables
+
+Creating Auxillary Variables
+
+1) AVG: career batting average, the number of hits divided by number of at-bats
+2) OBP: career on base percentage, (hits + walks)/(at bats + walks)
+
+Career Averages, divided by years:
+
+3) At-bats
+4) Hits
+5) Home runs
+6) Runs scored
+7) RBI's
+
+  
+```{r}
+years <- baseball_df$years
+
+# I'm gonna use "_car" short for career
+AVG <- baseball_df$H / baseball_df$AB
+OBP <- (baseball_df$H + baseball_df$BB) / (baseball_df$AB + baseball_df$BB)
+AB_car <- baseball_df$CAB / years
+H_car <- baseball_df$CH / years
+HR_car <- baseball_df$CHR / years
+R_car <- baseball_df$CR / years
+RBI_car <- baseball_df$CRBI / years
+```
+
+--------------------------
+
+#### Data Normalization
+
+Making a dataframe of the numeric variables, and log-transforming salary (the response variable) and career at-bat.
+```{r}
+log_salary <- log(baseball_df$salary)
+log_CR <- log(1 + baseball_df$CR)
+
+baseball_num <- select(baseball_df, G.x, GS, InnOuts, PO, 
+                       A, E, DP, G.y, AB, R, H, X2B, X3B, 
+                       HR, RBI, SB, CS, BB, SO, IBB, HBP, 
+                       SH, SF, GIDP, CAB, CH, CHR, CR, CRBI, 
+                       CBB)
+
+# with auxillary variables
+baseball_num <- mutate(baseball_num, 
+                       AVG, OBP, AB_car, H_car, HR_car, 
+                       R_car ,RBI_car, log_salary, log_CR) 
+```
+
+Normalizing Data
+```{r}
+baseball_mat <- as.matrix(baseball_num)
+baseball_norm <- baseball_mat
+
+for(j in 1:length(baseball_num)){
+  temp_vec <- baseball_mat[, j]
+  temp_mean <- mean(temp_vec)
+  temp_sd <- sd(temp_vec)
+  
+  temp_vec <- (temp_vec - temp_mean)/temp_sd
+  
+  baseball_norm[,j] <- temp_vec
+}
+
+baseball_norm <- as.data.frame(baseball_norm)
+```
+
+--------------------------
+
+
+#### Dummy Variables
+
+Years are transformed into: 0-2, 3-5, 6+ (so two dummy variables)
+Positions are transformed into: four 0/1 dummy variables, coded 1 for players who consistently played second base or shortstop (i.e., middle infielders, MI), catcher (C), center field (CF), or designated hitter (DH)
+  
+There's no designated hitter entry
+  
+Making Dummy Variables
+```{r}
+# years dummy variable
+years <- baseball_df$years
+n <- length(years)
+
+# empty vectors
+year_dum35 <- rep(0, n)
+year_dum6 <- rep(0, n)
+
+# filling out
+year_dum35[years > 2 & years < 6] <- 1
+year_dum6[years > 5] <- 1
+
+# now for position dummy variables
+position <- baseball_df$POS
+
+# empty vectors
+mi_dum <- rep(0, n)
+catcher_dum  <- rep(0, n)
+centerf_dum  <- rep(0, n)
+
+# filling them out
+mi_dum[position == "2B" | position == "SS" | position == "12" | position == "OS"] <- 1
+catcher_dum[position == "C"]  <- 1
+centerf_dum[position == "CF"]  <- 1 
+```
+
+
+Finalizing the data matrix
+```{r}
+bb_final <- mutate(baseball_norm, year_dum6, 
+                   year_dum35, mi_dum, catcher_dum, 
+                   centerf_dum)
+```
+
+\newpage
+
+## Analysis
+
+Fitting a simple model predicting salary(logged) from dummy variables indicating length of career, career runs(logged), and interaction between the two. I originally calculated years as a continuous variable, but I ran into problems with linear dependencies later on, and have here switched to the dummy variables instead. 
+```{r}
+# making a smaller data frame from the larger one
+small_df <- select(bb_final, log_salary, year_dum6, year_dum35, log_CR)
+
+# breaking the columns into vectors
+log_CR <- small_df$log_CR
+year6_logCR_interaction <- year_dum6 * log_CR
+year35_logCR_interaction <- year_dum35 * log_CR
+
+small_df <- mutate(small_df, year6_logCR_interaction, year35_logCR_interaction)
+
+
+# creating a model based on those vectors
+lm_small <- lm(log_salary ~ ., data = small_df)
+summary(lm_small)
+```
+
+Graphically, this looks like three lines fitting the three types of data.
+```{r}
+ggplot(data = small_df, aes(x = log_CR, y = log_salary)) + 
+  geom_point() + geom_abline(slope = 0.08383, intercept = -0.7654) + 
+  geom_abline(intercept = -0.7654 + 0.77467, slope = 0.08383 + 0.90160) + 
+  geom_abline(intercept = -0.76549 + 0.19170, slope = 0.08383 + 0.23912)
+```
+\newpage
+
+Let's look for high leverage points(hat values 2-3 times the average), outliers, and influence. The green line is the average hat value. The orange line is three times the average hat value, and I'm considering hat-values well above that line suspiciously high.
+```{r}
+# hat values
+hat_mean <- mean(hatvalues(lm_small))
+plot(hatvalues(lm_small))
+abline(hat_mean, 0, col = "green")
+abline(3* hat_mean, 0, col = "orange")
+```
+
+It looks like there are 3 points with really really high hat values that I'd like to consider tossing, namely 399, 303, and 414
+```{r}
+head(sort(hatvalues(lm_small), decreasing = TRUE), n = 7)
+```
+
+Looking for outliers in the studentized residuals. There are five points well outside of three standard deviations(the orange line) of the studentized residuals.
+```{r}
+r_student_sd <- sd(rstudent(lm_small))
+plot(rstudent(lm_small))
+abline(r_student_sd * 2.5, 0, col = "orange")
+abline(r_student_sd * -2.5, 0, col = "orange")
+abline(0, 0, col = "green")
+```
+
+Again, we see points 398, 379, and 72
+```{r}
+head(sort(abs(rstudent(lm_small)), decreasing = TRUE), n = 7)
+```
+
+
+
+Graphing studentized residuals versus leverage. In this graph, we can also see the influence of through the size of the bubbles. Points 72, 414, and 398 have lots of influence. Here, I can see that while 399 has a very high hat-value, its studentized residual is small enough so that 399 does not exert undue influence on the model.
+```{r}
+influencePlot(lm_small, main = "Influence Bubble Plot of Regression of Log Salary on Runs and Years ")
+```
+
+#### Regression without the Influential Points
+
+What's the point of identifying the bad points if I'm not going to do a regression without them? I'm omitting points 398, 72, and 414. While point 399 has a very high at value and leverage, it's studentized residual looks very good. 
+```{r}
+## it's called small_df_cleaner because it's a smaller data frame, and cleaner in that it's scrubbed of bad values
+small_df_cleaner <- slice(small_df, -72, -398, -414)
+
+# primary terms
+logsalary_cleaner <- small_df_cleaner$log_salary
+year35_cleaner <- small_df_cleaner$year_dum35
+year6_cleaner <- small_df_cleaner$year_dum6
+log_CR_cleaner <- small_df_cleaner$log_CR
+
+# interaction terms
+logCR_year35_cleaner <- year35_cleaner * log_CR_cleaner
+logCR_year6_cleaner <- year6_cleaner * log_CR_cleaner
+
+lm_small_cleaner <- lm(logsalary_cleaner ~ year35_cleaner + year6_cleaner + log_CR_cleaner + logCR_year35_cleaner + logCR_year6_cleaner)
+summary(lm_small_cleaner)
+```
+
+
+In order to better graph the qualitative nature of the years dummy variables, I'm combining them into one variable for the purpose of graphing.
+```{r}
+# one variable from two
+years_qual <- small_df_cleaner$year_dum35 + 2 * small_df_cleaner$year_dum6
+
+# labelling
+years_qual[years_qual == 0] <- "1-2 Years"
+years_qual[years_qual == 1] <- "3-5 Years"
+years_qual[years_qual == 2] <- "6+ Years"
+
+small_graph_df <- mutate(small_df_cleaner, years_qual)
+
+
+ggplot(data = small_graph_df, aes(x =  log_CR, y = log_salary)) + 
+  geom_point(aes(color = years_qual)) + 
+  xlab("Log of Career Runs") +
+  ylab("Log of Salary") + facet_grid(.~years_qual) + 
+  geom_abline(slope = 0.08383, intercept = -0.7654, color = "red") + 
+  geom_abline(intercept = -0.7654 + 0.77467, slope = 0.08383 + 0.90160, color = "royalblue3") + 
+  geom_abline(intercept = -0.76549 + 0.19170, slope = 0.08383 + 0.23912, color = "springgreen4") + 
+  ggtitle("Log of Salary Regressed on Log of Career Runs and Years")
+```
+
+
+\newpage
+
+Fitting a linear least-squares regress of log salary on all explanatory variables. While the plot below doesn't display influence directly, like the bubble plot from before, it's much cleaner. We see the troublesome points 300, 379, and 398.
+```{r}
+lm_all <- lm(log_salary ~ ., data = bb_final)
+
+
+plot(lm_all, which  = 5)
+```
+
+Here, I notice that many of the variables are highly correlated. While many values have a covariance of zero, and all values have a covariance of one with themselves, there is a large number of values between 0.6 and 0.99, what I would consider highly correlation.
+```{r}
+hist(cov(as.matrix(bb_final)), xlab = "Covariance Values", main = "Histogram of Covariance Values")
+```
+
+\newpage
+
+4) Finding the 10 best models for each size. To do this, I'm going to find the ten best models of each size with a forward search and the ten best models of each size with a backwards search, then find the 10 best models from those twenty of each model size. For models of the same size, I'm going to use the simple criterion of the highest adjusted R-squared to determine which model is best.
+```{r}
+# use nbest to specify the number of subsets of each size to record
+# use nvmax to specify the maximum size of subsets to examine
+
+# forward search
+regfit.bb.forward <- regsubsets(log_salary ~ ., data = bb_final, method = "forward", nbest = 10, nvmax = 44)
+regfit.bb.forward.summary <- summary(regfit.bb.forward)
+
+# backwards search
+regfit.bb.backward <- regsubsets(log_salary ~ ., data = bb_final, method = "backward", nbest = 10, nvmax = 44)
+regfit.bb.backward.summary <- summary(regfit.bb.backward)
+
+```
+
+```{r}
+# making a matrix with columns for type of search(forward or backwards), 
+#      index, number of variables, and adjusted r-squared
+
+# lengths
+n_forward <-length(regfit.bb.forward.summary$adjr2)
+n_backward <- length(regfit.bb.backward.summary$adjr2)
+
+# types: forward is 0, backward is 1
+type_forward <- rep(0, n_forward)
+type_backward <- rep(1, n_backward)
+
+
+# index
+index_forward <- 1:n_forward
+index_backward <- 1:n_backward
+
+# number variables
+num_variables_forward <- rowSums(regfit.bb.forward.summary$which)
+num_variables_backward <- rowSums(regfit.bb.backward.summary$which)
+
+# adjusted r-square
+adr2_forward <- regfit.bb.forward.summary$adjr2
+adr2_backward <- regfit.bb.backward.summary$adjr2
+
+# in a matrix
+n_mat <- n_forward + n_backward
+
+# model id
+model_id <- 1:n_mat 
+  
+  
+mat_regfit <- matrix(c(model_id, type_forward, type_backward, index_forward, index_backward,
+                       num_variables_forward, num_variables_backward, adr2_forward, adr2_backward), 
+                     nrow = n_mat, 
+                     dimnames = list(NULL, c("id", "type", "index", "variables", "adjr2")))
+head(mat_regfit)
+```
+
+Now, I'll find the ten largest R-squares for each model size. The original matrix of the ten best models from both the forward and backward searches has 769 rows. I've cut that down to 412 rows. I've realized now that the number of models generated this way is not a perfect multiplication of 44 possible model sizes times 10 models, because for some model sizes, having ten different models isn't possible. 
+```{r}
+df_regfit <- as.data.frame(mat_regfit)
+
+
+# this will be the matrix of the best models of each size.  
+df_regfit_best <- df_regfit
+regfit_best_logical <- rep(FALSE, n_mat)
+
+
+for(k in 2:45){
+  temp_df <- filter(df_regfit, variables == k)
+  
+  # finding the 10 best adjr2 (adjusted r squared) at each variable count
+  temp_df <- arrange(temp_df, desc(adjr2))
+  temp_df <- slice(temp_df, 1:10)
+  
+  best_id <- temp_df$id
+  
+  
+    # recording which is best
+  for(j in 1:10){
+      regfit_best_logical[df_regfit$id == best_id[j]] <- TRUE
+  }
+}
+
+df_regfit_best <- df_regfit_best[regfit_best_logical,]
+
+head(df_regfit_best, n = 9)
+```
+
+Plotting the 10 best models of each size's Adjsuted R-square value
+```{r}
+plot(df_regfit_best$variables, df_regfit_best$adjr2, xlab = "Model Size", ylab = "Adjusted R-squared")
+```
+
+
+\newpage
+
+
+5) Using BIC to find the 5 best models from the previous step. The first thing to do in this process is to add BIC to the matrix that I used to evaluate the models.
+```{r}
+all_bic <- c(regfit.bb.forward.summary$bic, regfit.bb.backward.summary$bic)
+
+# filtering for the best 10 models of each size
+best_bic <- all_bic[regfit_best_logical]
+
+# adding it to the dataframe
+df_regfit_best <- mutate(df_regfit_best, best_bic)
+
+head(df_regfit_best)
+
+plot(df_regfit_best$variables, df_regfit_best$best_bic, xlab = "Model Size", ylab = "BIC")
+```
+
+----------------------------
+
+Finding the smallest 5 BIC. What I like about the one's that I've found is how diverse in model size there are; there is only one model size repeat. Here they are displayed, ranked by BIC.Interestingly, they're almost all from the backwards search.
+```{r}
+best_bic_df <- arrange(df_regfit_best, -desc(best_bic))
+best_bic_df <- slice(best_bic_df, 1:5)
+
+head(best_bic_df)
+```
+
+
+\newpage
+6) Using 10-fold cross validation in order to rank these models. 
+
+To do this, I need to actually pull up the models from the regsubset summaries. 
+```{r}
+best_BIC_logical <- regfit.bb.backward.summary$which[c( 69, 79, 89, 99), ]
+
+# adding the one one forward searched model
+best_forward_model <- regfit.bb.forward.summary$which[71,]
+
+# combinding them
+best_BIC_logical <- rbind(best_BIC_logical, best_forward_model)
+
+best_BIC_logical[,1:7]
+```
+
+-----------------
+
+Now I have a logical matrix of which variables each model contains. Now for 10-fold cross validation. With 421 rows of data divided into 10 groups, 9 groups should have 42 entries, and one group should have 43 entries. While I'm essentially using the code from lab, I've found that extracting the logical matrix and applying it directly to the model made it a lot easier to combine the good models found from both forward and backward search. The model with the best MSE was model 4, which not containing the intercept had 11 variables: games played, at bat number, hits, total career at-bats, total career walks, total ab-bats divided by year, total home runs divided by year, total runs divided by year, runs-batted-in divided by career, log of career runs, and a dummy variable for years greater than 6.
+```{r}
+permutation <- sample(1:nrow(bb_final))
+folds <- c(rep(1:10, each = nrow(bb_final)/10), 10)
+X <- model.matrix(log_salary ~ ., bb_final)
+avg_test_MSE <- rep(0,5)
+
+#loop over each model
+for(i in 1:5){
+  test_MSE <- rep(0,10)
+  #loop over folds
+    for(j in 1:10){
+      
+      #identify training and test sets
+      idx_train <- permutation[folds != j]
+      idx_test <- permutation[folds == j]
+      
+      #extract which variables to use from regfit 
+      vars <- best_BIC_logical[i,]
+      X_best_subset <- X[,vars]
+      mod <- lm(bb_final$log_salary ~ X_best_subset - 1, subset = idx_train)
+      X_test <- X_best_subset[idx_test,]
+      test_predictions <- X_test %*% as.matrix(coef(mod))
+      test_MSE[j] <- mean((bb_final$log_salary[idx_test] - test_predictions)^2)
+    }
+  avg_test_MSE[i] <- mean(test_MSE)
+}
+
+#plot root mean squared error curve
+plot(sqrt(avg_test_MSE), xlab = "Model Number", ylab = "Root Mean Squared Error", pch = 20, cex = 2)
+
+colnames(best_BIC_logical)[best_BIC_logical[4,]]
+```
+
+\newpage
+
+7) LASSO: plotting the mean-square-error against its log lambda.
+```{r}
+X <- model.matrix(log_salary ~ ., bb_final)
+y <- bb_final$log_salary
+
+#fit lasso path over lambda.grid
+lasso.mod <- glmnet(x = X, y = y, alpha = 1)
+#cross validated lasso 
+cv.lasso.mod <- cv.glmnet(x = X, y = y, alpha = 1, nfolds = 10)
+plot(cv.lasso.mod)
+
+```
+
+
+Plotting the lasso constrained coefficients against the log lambda that produced them. 
+```{r}
+best.lasso.lam <- cv.lasso.mod$lambda.min
+#plot the lasso path on the lambda scale and add a line for the values at the best lambda
+plot(lasso.mod, xvar = "lambda")
+lines(c(log(best.lasso.lam), log(best.lasso.lam)), c(-1000, 1000), lty = "dashed", lwd = 3)
+
+```
+
+Both plots have placed the minimum mean-square-error at log lambda equal to negative 5.50. The variables with non zero coefficients are printed
+```{r}
+which(lasso.mod$lambda == best.lasso.lam)
+x <- lasso.mod$beta[,57]
+x[x != 0]
+```
+
+
+Finding the mean-squar-error of this model. The mean-square-error of this model is 0.24, which is much smaller than the best mean-square-error of the best previous model, whose MSE's bottomed out at only 0.477.
+```{r}
+min(cv.lasso.mod$cvm)
+```
+
+## Data Exploration
+I've moved this section to the end
+
+The most interesting and intuitive graphs I found were in the process of assessing leverage values of the small linear model and the faceting of the regression of log salary on log career runs and dummy variables of years. To me, it looks like many of the points in the first two facets(the groups with years less than 6) are closely following the least squares regression line of the last facet.
+
+```{r}
+influencePlot(lm_small, main = "Influence Bubble Plot of Regression of Log Salary on Runs and Years ")
+
+ggplot(data = small_graph_df, aes(x =  log_CR, y = log_salary)) + geom_point(aes(color = years_qual)) + xlab("Log of Career Runs") +ylab("Log of Salary") + facet_grid(.~years_qual) + geom_abline(slope = 0.08383, intercept = -0.7654, color = "red") + geom_abline(intercept = -0.7654 + 0.77467, slope = 0.08383 + 0.90160, color = "royalblue3") + geom_abline(intercept = -0.76549 + 0.19170, slope = 0.08383 + 0.23912, color = "springgreen4") + ggtitle("Log of Salary Regressed on Log of Career Runs and Years")
+```
+
+
