@@ -1,0 +1,346 @@
+---
+title: "pca fresh start"
+author: "Wayne Monical"
+date: "4/28/2021"
+output: html_document
+---
+
+
+Notes:
+all.hap has a good linear scree plot ( I was wrong. That wall all of them)
+also a goal: conduct PCA on the original and the square-rooted data (DONE, with similar results as others)
+What I need to do is rescale the drug treatment levels
+
+
+
+
+
+Library Load
+```{r}
+library(readr)
+library(tidyverse)
+library(scatterplot3d)
+library(kernlab)
+```
+
+
+
+```{r}
+# info load
+experiment.information <- read.csv("experiment.information.csv")
+all.reads <- read_csv("all.crispresso.clean.csv")
+all.reads <- all.reads[,-1]
+
+replace.list <- as.list(rep(0, ncol(all.reads)))
+names(replace.list) <- names(all.reads)
+
+
+# replace NA's with zeros
+all.reads <- replace_na(data = all.reads, replace = replace.list)
+
+```
+
+
+
+
+```{r}
+# WT will only be in all.reads
+# p4 and p5 will only be in the all.reads, all.hap, and all.dip
+cell.type <- experiment.information$Cell.Type
+treatment.type <- experiment.information$trtmnt.type
+
+# percent.boolean takes care of the NA's                                                                     # drops WT's             # drops p4's and p5's
+percent.boolean <- experiment.information$data.type == "%" & !is.na(experiment.information$data.type)        & cell.type != "WT"      & treatment.type != "p4" & treatment.type != "p5"
+
+
+
+
+all.boolean <- percent.boolean
+all.hap <- cell.type == "H" & percent.boolean
+all.dip <- cell.type == "D" & percent.boolean
+
+hap.nira <- cell.type == "H" & percent.boolean & treatment.type == "Nira"
+hap.ola <- cell.type == "H" & percent.boolean & treatment.type == "Ola"
+hap.gy <- cell.type == "H" & percent.boolean & treatment.type == "Gy"
+
+dip.nira <- cell.type == "D" & percent.boolean & treatment.type == "Nira"
+dip.ola <- cell.type == "D" & percent.boolean & treatment.type == "Ola"
+dip.gy <- cell.type == "D" & percent.boolean & treatment.type == "Gy"
+
+boolean.list <- list(all.boolean = all.boolean, all.hap = all.hap, all.dip = all.dip, hap.nira = hap.nira, hap.ola = hap.ola, hap.gy = hap.gy, dip.nira = dip.nira, dip.ola = dip.ola, dip.gy = dip.gy)
+```
+
+
+
+To do for the 10000th time: turn NA's to zeros in all.reads
+```{r}
+mutations.na <- apply(all.reads[,all.dip], 1, function(x){sum(is.na(x))}) > 0
+summary(mutations.na)
+
+view.reads <- all.reads[order(all.reads$`By mutation(s)`),]
+
+length(unique(all.reads$`By mutation(s)`))
+length(all.reads$`By mutation(s)`)
+
+```
+
+
+SUCESS!!!
+```{r}
+# boolean.vector is logical as to whether the ith of n data points should be included in the analysis
+
+begin.object <- function(boolean.vector, y.data, x.set){
+  list(y.data = y.data[,boolean.vector], x.set = x.set[boolean.vector,])
+}
+
+conduct.linear.pca <- function(list.object){
+  
+  # checks
+  if(prod(names(list.object) != c("y.data", "x.set"))){
+    stop("incorrect list.object. Use begin.object function")
+  }
+  
+  
+  linear.pca <- prcomp(t(list.object$y.data), center = FALSE)
+  
+  c(list.object, linear.pca = list(linear.pca))
+  
+  
+}
+
+
+
+# testing
+first.obj <- begin.object(boolean.vector = all.boolean, y.data = all.reads, x.set = experiment.information)
+first.obj.pca <- conduct.linear.pca(list.object = first.obj)
+```
+
+
+
+Applying it to all booleans
+```{r}
+all.obj <- lapply(boolean.list, FUN = function(x){begin.object(boolean.vector = x, y.data = all.reads, x.set = experiment.information)})
+
+
+# it literally works
+all.obj.lpca <- lapply(all.obj, FUN = function(x){conduct.linear.pca(x)})
+
+
+# lets try to use the screeplot function
+# none of these screeplots are good except the one for all the data
+lapply(all.obj.lpca, FUN = function(x){screeplot(x$linear.pca)})
+```
+
+Plots to save
+```{r}
+par(mfrow = c(1,2))
+screeplot(all.obj.lpca$all.hap$linear.pca, main = "Screeplot of All Haploid Experiments")
+screeplot(all.obj.lpca$all.dip$linear.pca, main = "And of All Diploid Experiments")
+
+```
+
+
+
+Conduct Regression
+
+I'd like conduct regression to take either linear of kernel pca's
+Well, I'd like it to take the whole object
+```{r}
+conduct.regression <- function(list.object, linear.pca = TRUE, anova = FALSE){
+  
+  # lm needs a formula
+  regression.formula <- (formula.function(list.object))[[1]]
+  
+  if(linear.pca){
+    
+    # I'm putting this chunk on hold
+    # Has linear pca been conducted? If not, conduct it
+    #if(! linear.pca %in% names(list.object)){
+     # list.object <- conduct.linear.pca(list.object = list.object)
+    #}
+    
+    y.set <- list.object$linear.pca$x[,1]
+    
+    
+    
+    design.matrix <- data.frame(y.set = y.set, list.object$x.set)
+    
+    lpca.regression <- lm(formula = regression.formula, data = design.matrix)
+    
+    if(!anova){
+      return(c(list.object, lpca.regression = list(lpca.regression)))
+    }
+  }
+  
+  
+}
+
+
+conduct.regression2 <- function(list.object, pcas = 1:3){
+  
+  # lm needs a formula
+  regression.formula <- (formula.function(list.object))[[1]]
+  
+    
+  num.list <- create.numlist(pcas)  
+    
+  lpca.regressions <- lapply(num.list, FUN = function(y){apply.regression(y.set = list.object$linear.pca$x[,y],
+                                                                          x.set = list.object$x.set,
+                                                                          formula = regression.formula
+                                                                          )})
+  return(c(list.object, lpca.regressions = list(lpca.regressions)))
+  
+}
+
+
+
+apply.regression <- function(y.set, x.set, formula){
+  design.matrix <- data.frame(y.set = y.set, x.set)
+  lm(formula = formula, data = design.matrix)
+  }
+
+
+
+create.numlist <- function(integer.vector){
+  names(integer.vector) <-  integer.vector
+  as.list(integer.vector)
+}
+
+
+
+# conduct.regression depends on formula.function
+formula.function <- function(list.object){
+  cell.type.include <- length(unique(list.object$x.set$Cell.Type)) > 1
+  treatment.type.include <- length(unique(list.object$x.set$trtmnt.type)) > 1
+  
+  possible.formulas[cell.type.include  + treatment.type.include + 1]
+}
+
+
+
+# formula.function depends on this constant
+possible.formulas <- c(y.set ~ trtmnt.amnt, y.set ~ trtmnt.type + trtmnt.amnt, y.set ~ Cell.Type + trtmnt.type + trtmnt.amnt)
+
+
+# test. It works!
+first.obj.reg2 <- conduct.regression2(first.obj.pca)
+summary(first.obj.reg2$lpca.regressions$`1`)
+
+
+
+all.obj.reg2$dip.ola$lpca.regressions$`1`
+```
+
+Doing all regressions
+
+```{r}
+all.obj.reg2 <- lapply(all.obj.lpca, FUN = function(z){conduct.regression2(z, pcas = 1:4)})
+
+
+lapply(all.obj.reg2$all.hap$lpca.regressions, FUN = summary)
+```
+Looking at all regressions
+```{r}
+all.regressions <- lapply(all.obj.reg2, FUN = function(w){lapply(w$lpca.regressions, FUN = summary)})
+all.regressions
+
+```
+
+```{r}
+y.set <- all.obj.reg2$all.hap$linear.pca$x[,1]
+x.set <- all.obj.reg2$all.hap$x.set
+ex.mat <- data.frame(y.set = y.set, x.set)
+ex.lm <- lm(y.set ~ trtmnt.amnt, data = ex.mat)
+summary(ex.lm)
+```
+
+
+
+```{r} 
+# This is the haploid diploid split
+plot(first.obj.reg$linear.pca$x[,1])
+
+# this is how genes are effected
+# 
+plot(first.obj.reg$linear.pca$rotation[1:200,1])
+plot(first.obj.reg$linear.pca$rotation[1:200,2])
+plot(first.obj.reg$linear.pca$rotation[1:200,3])
+plot(first.obj.reg$linear.pca$rotation[1:200,4])
+
+hist(all.obj.lreg$all.boolean$linear.pca$x[,1])
+
+
+all.obj.lreg$all.hap$linear.pca$x
+
+hist(all.obj.lreg$all.hap$linear.pca$x[,1])
+hist(all.obj.lreg$all.hap$linear.pca$x[,2])
+hist(all.obj.lreg$all.hap$linear.pca$x[,3])
+
+
+plot(first.obj.reg$lpca.regression$residuals)
+```
+
+
+```{r}
+lapply(all.obj.lreg, FUN = function(x){summary(x$lpca.regression)})
+```
+
+
+
+
+
+
+This might evaporate everything, but we have to try rescaling the treatment values, 2 to 5?
+
+
+
+List index
+y.set DONE
+x.set DONE
+linear.pca DONE
+linear.pca.summary # summary you can just apply; that's not that big a deal
+linear.pca.regression DONE
+linear.pca.regression.summary
+
+
+anova.pca
+anova.pca.more
+anova.pca.regression
+anova.pca.regression.summary
+
+
+I have right now
+boolean.vector
+y.data
+x.set
+
+
+
+nnet.plan
+  starting point
+    y.data
+    x.set
+    boolean
+    
+  primary process
+    y.data[boolean]
+    x.set[boolean]
+    
+  unstacking step
+    y.unstacked
+    x.set
+    
+  nnet step
+    
+
+
+Defending my choices
+  Using all data points
+    The facts: the screeplot looks better than it has any right to, since the variance you see is almost entirely the hap/dip split
+    But the rest of the experiments only have 6 or so examples. We need the power of the tens-scale to exctract the info
+
+  The multiple testing bonferroni correction works in our favor. 
+    i.e. the bonferroni correction allows us to ignore non *** results
+    124 params, our significance boundary becomes 
+  
+  With the number of reads so high

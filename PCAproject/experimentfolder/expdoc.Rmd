@@ -1,0 +1,18 @@
+---
+title: "Experiment Doc"
+author: "Wayne Monical"
+date: "8/26/2021"
+output: html_document
+---
+
+
+
+```{r}
+source("expscript.R")
+```
+
+
+```{r}
+print(a)
+```
+

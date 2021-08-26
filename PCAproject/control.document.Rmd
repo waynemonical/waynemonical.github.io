@@ -1,0 +1,80 @@
+---
+title: "Control Document"
+author: "Wayne Monical"
+date: "8/26/2021"
+output: html_document
+---
+
+Libraries `readr`, `tidyverse`, 'crayon', and `kernlab` are loaded.
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
+library(readr)
+library(tidyverse)
+library(scatterplot3d)
+library(kernlab)
+```
+
+
+
+Data Cleaning and Load
+```{r}
+source("data.load.and.clean.R")
+```
+
+```{r}
+head(all.reads[,3:9])
+```
+
+
+(brief discussion of raw to final data and experiment information)
+
+
+
+(show a table)
+
+
+Function Load
+```{r}
+source('core.functions.R')
+```
+(description of major functions, and their dependents)
+
+
+Functions Applied for Analysis
+```{r}
+
+```
+
+
+First object
+```{r}
+first.obj <- begin.object(boolean.vector = all.boolean, y.data = all.reads, x.set = experiment.information)
+first.obj.pca <- conduct.linear.pca(list.object = first.obj)
+
+plot(first.obj.pca$linear.pca)
+
+
+first.obj.reg2 <- conduct.regression2(first.obj.pca)
+summary(first.obj.reg2$lpca.regressions$`1`)
+```
+
+All objects
+```{r, results= 'hide', message = FALSE, }
+all.obj <- lapply(boolean.list, FUN = function(x){begin.object(boolean.vector = x, y.data = all.reads, x.set = experiment.information)})
+
+
+# it literally works
+all.obj.lpca <- lapply(all.obj, FUN = function(x){conduct.linear.pca(x)})
+
+
+# lets try to use the screeplot function
+# none of these screeplots are good except the one for all the data
+lapply(all.obj.lpca, FUN = function(x){screeplot(x$linear.pca)})
+```
+
+
+(here be the meat. The applies, etc)
+
+
+
+
+
