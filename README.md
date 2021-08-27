@@ -1,30 +1,17 @@
-# waynemonical.github.io
+## Wayne Monical
 
-Does work????
+Hello and welcome to my website. 
 
-
-Me a sandwich
-
-#### markdown experiements
+This is a temporary landing page to redirect to my code samples and graphic samples, found below. Have a nice day!
 
 
-![Alt text](StockPredictions.png)
+#### [Basic Code Sample](https://rawcdn.githack.com/waynemonical/waynemonical.github.io/21c9be7053d5a740af41d9d14316dafce70eb965/BasicCodeSample/Code-Sample-Notebook-2.html)
+
+- Displays complex data cleaning, functional programming, and graphical programming skills. 
+- Heavily trimmed code for presentation and clarity. Please find the [full program code here](https://rawcdn.githack.com/waynemonical/waynemonical.github.io/21c9be7053d5a740af41d9d14316dafce70eb965/BasicCodeSample/W%20Monical%20Code%20Sample.html).
 
 
+#### [Graphics Sample](https://rawcdn.githack.com/waynemonical/waynemonical.github.io/21c9be7053d5a740af41d9d14316dafce70eb965/GraphicsHighlight/graphics.highlight.html)
 
-<details>
-  <summary>Click for Answer</summary>
-    ```{r, echo=FALSE, eval=TRUE}
-    hist(1:10)
-    ```
-</details> 
-
-
-reload link:
-https://waynemonical.github.io./
-
-
-
-
-
-[Basic Code Sample](https://rawcdn.githack.com/waynemonical/waynemonical.github.io/e86e329e3e3b5aee1896d7d5434ee9e447fdecc2/BasicCodeSample/W%20Monical%20Code%20Sample.html)
+- Includes two graphs, one each from biological and economic analysis. 
+- Demonstrates concise work flow for graphic communication.
