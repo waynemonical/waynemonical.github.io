@@ -1,0 +1,177 @@
+---
+title: "Scratch Work"
+output: html_notebook
+---
+
+
+
+```{r}
+experiment.information[all.boolean,]
+```
+
+
+```{r}
+analysis <- all.obj.reg2$all.boolean
+
+number.of.pcs <- 1:2
+
+B <- as.matrix(analysis$linear.pca$rotation[,number.of.pcs])
+colnames(B) <- NULL
+
+
+
+C <- analysis$linear.pca$rotation[number.of.pcs, ]
+colnames(C) <- NULL
+
+
+D <- matrix(0, nrow = ncol(B), ncol = C)
+
+
+X <- model.matrix(y.set ~ ., analysis$lpca.regressions$`1`$model)
+rownames(X) <- NULL
+colnames(X) <- NULL
+
+H <- X %*% solve(t(X) %*% X) %*% t(X)
+
+hatA <- B %*% C %*% H
+
+#mean( abs(hatA - as.matrix(analysis$y.data) ) )
+
+hatA <- as.data.frame(hatA)
+names(hatA) <- names(analysis$y.data)
+
+# adding mutation columns!
+fitted.percents <- mutate(hatA, mutation = all.reads$`By mutation(s)`)
+
+# unstacking
+fitted.percents.unstack <- pivot_longer(data = fitted.percents, cols = -mutation, names_to = "sample", values_to = "percent")
+
+
+fitted.percents.unstack <- mutate(fitted.percents.unstack, obs.or.predict = "Prediction")
+
+
+
+
+####  Observation Data
+####
+observations <- mutate(analysis$y.data, mutation = all.reads$`By mutation(s)`)
+
+observed.percents.unstack <- pivot_longer(data = observations, cols = -mutation, names_to = "sample", values_to = "percent")
+
+observed.percents.unstack <- mutate(observed.percents.unstack, obs.or.predict = "Observation")
+
+
+
+
+#### Row Binding
+####
+
+
+final.percents <- rbind(fitted.percents.unstack, observed.percents.unstack)
+
+# adding experiment information
+rownames(experiment.information) <- experiment.information$entire
+final.percents <- cbind(final.percents, experiment.information[ final.percents$sample,])
+
+
+final.percents
+```
+
+```{r}
+analysis <- all.obj.reg2$all.boolean
+
+
+graphics.pipeline2 <- function(analysis, number.of.pcs = 1:2){
+
+B <- as.matrix(analysis$linear.pca$rotation[,number.of.pcs])
+colnames(B) <- NULL
+
+
+
+C <- analysis$linear.pca$rotation[number.of.pcs, ]
+colnames(C) <- NULL
+
+
+D <- matrix(0, nrow = ncol(B), ncol = C)
+
+
+X <- model.matrix(y.set ~ ., analysis$lpca.regressions$`1`$model)
+rownames(X) <- NULL
+colnames(X) <- NULL
+
+H <- X %*% solve(t(X) %*% X) %*% t(X)
+
+hatA <- B %*% C %*% H
+
+#mean( abs(hatA - as.matrix(analysis$y.data) ) )
+
+hatA <- as.data.frame(hatA)
+names(hatA) <- names(analysis$y.data)
+
+# adding mutation columns!
+fitted.percents <- mutate(hatA, mutation = all.reads$`By mutation(s)`)
+
+# unstacking
+fitted.percents.unstack <- pivot_longer(data = fitted.percents, cols = -mutation, names_to = "sample", values_to = "percent")
+
+
+fitted.percents.unstack <- mutate(fitted.percents.unstack, obs.or.predict = "Prediction")
+
+
+
+
+####  Observation Data
+####
+observations <- mutate(analysis$y.data, mutation = all.reads$`By mutation(s)`)
+
+observed.percents.unstack <- pivot_longer(data = observations, cols = -mutation, names_to = "sample", values_to = "percent")
+
+observed.percents.unstack <- mutate(observed.percents.unstack, obs.or.predict = "Observation")
+
+
+
+
+#### Row Binding
+####
+
+
+final.percents <- rbind(fitted.percents.unstack, observed.percents.unstack)
+
+# adding experiment information
+rownames(experiment.information) <- experiment.information$entire
+final.percents <- cbind(final.percents, experiment.information[ final.percents$sample,])
+
+
+
+ return(c(analysis, prediction.plotting = list(final.percents)))
+}
+
+ex <- graphic.pipeline(analysis, principle.components.used = 1:2)
+
+ex$prediction.plotting
+
+ex2 <- graphics.pipeline2(analysis)
+
+ex2$prediction.plotting
+
+
+```
+
+```{r}
+all.percent.sum <- apply(all.reads[,all.boolean], 1, sum)
+mutation.subsample <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][1:10]
+```
+
+```{r}
+filter(ex2$prediction.plotting, mutation %in% mutation.subsample )
+```
+
+
+```{r}
+hist(filter(ex$prediction.plotting, obs.or.predict == "Prediction")$percent)
+hist(filter(ex$prediction.plotting, obs.or.predict == "Observation")$percent)
+
+```
+
+
+

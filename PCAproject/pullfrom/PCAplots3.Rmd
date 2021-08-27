@@ -80,7 +80,7 @@ Plotting
 all.percent.sum <- apply(all.reads[,all.dip], 1, sum)
 mutation.subsample <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][1:3]
 
-subsample <- filter(final.percents, (trtmnt.type == "Ola" | trtmnt.type == "mock") & mutation %in% mutation.subsample & !percent < 0.5)
+subsample <- filter(final.percents, (trtmnt.type == "Ola" | trtmnt.type == "mock") & mutation %in% mutation.subsample )
 
 ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = mutation)) +
   geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +

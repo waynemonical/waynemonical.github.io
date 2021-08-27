@@ -44,8 +44,15 @@ conduct.regression2 <- function(list.object, pcas = 1:3){
 
 
 apply.regression <- function(y.set, x.set, formula){
-  design.matrix <- data.frame(y.set = y.set, x.set)
+  
+  boolean.NA <- y.set != 0
+  
+  design.matrix <- data.frame(y.set = y.set[boolean.NA], x.set[boolean.NA])
+  
+  
+  
   lm(formula = formula, data = design.matrix)
+  
   }
 
 

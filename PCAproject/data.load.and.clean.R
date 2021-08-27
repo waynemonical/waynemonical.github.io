@@ -10,7 +10,7 @@ experiment.information$trtmnt.type[experiment.information$trtmnt.type == "unt"] 
 experiment.information$trtmnt.type[experiment.information$trtmnt.type == "mock"] <- "Ola"
 
 # loading quantative data
-all.reads <- read.csv("all.crispresso.clean.csv")
+all.reads <- read_csv("all.crispresso.clean.csv")
 
 # cleaning
 all.reads <- all.reads[,-1]
@@ -47,7 +47,7 @@ dip.gy <- cell.type == "D" & percent.boolean & treatment.type == "Gy"
 
 boolean.list <- list(all.boolean = all.boolean, all.hap = all.hap, all.dip = all.dip, hap.nira = hap.nira, hap.ola = hap.ola, hap.gy = hap.gy, dip.nira = dip.nira, dip.ola = dip.ola, dip.gy = dip.gy)
 
-
+boolean.name.list = list(all.boolean = "all.boolean", all.hap = "all.hap", all.dip = "all.dip", hap.nira = "hap.nira", hap.ola = "hap.ola", hap.gy = "hap.gy", dip.nira = "dip.nira", dip.ola = "dip.ola", dip.gy = "dip.gy")
 
 
 require(crayon)

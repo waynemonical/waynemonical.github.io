@@ -1,0 +1,321 @@
+---
+title: "pca.graphing"
+author: "Wayne Monical"
+date: "4/30/2021"
+output: html_document
+---
+
+
+This doc requires the entire work space of pcafreshstart3.Rmd
+
+```{r}
+library(tidyverse)
+```
+
+
+```{r}
+is.scaled <- FALSE
+```
+
+
+```{r}
+fitted.val1 <- all.obj.reg2$all.hap$lpca.regressions$`1`$model$y.set
+
+first.pc <- (all.obj.reg2$all.hap$linear.pca$rotation[,1])
+
+all.obj.reg2$all.hap$linear.pca$rotation[,1]
+
+
+rebuild1 <- (fitted.val1) %*%  t(first.pc) 
+hist(apply(rebuild1, 1, sum))
+
+
+#rebuild <- all.obj.reg2$all.hap$linear.pca$x %*% t(all.obj.reg2$all.hap$linear.pca$rotation)
+#dim(rebuild)
+
+#sum(rebuild[3,])
+
+# ok for some reason it sums to 100 now
+#first.try <- first.pc %*% t(fitted.val1)
+
+
+```
+
+
+Pipeline
+```{r}
+# change these
+analysis <- all.obj.reg2$all.hap
+principle.components.used <- create.numlist(1:2)
+
+
+# let these doe the work
+observations <- analysis$y.data
+
+principle.comp.matrix <- analysis$linear.pca$rotation[,unlist(principle.components.used)]
+
+fitted.in.pca <- lapply(names(principle.components.used), FUN = function(a){analysis$lpca.regressions[[a]]})
+
+
+names(fitted.in.pca) <- principle.components.used
+
+
+
+
+#### Predicted Data
+####
+fitted.in.pca.matrix <- sapply(fitted.in.pca, FUN = function(b){b$fitted.values})
+
+fitted.percents <- principle.comp.matrix %*% t(fitted.in.pca.matrix)
+
+# adding mutation columns!
+fitted.percents <- mutate(as.data.frame(fitted.percents), mutation = all.reads$`By mutation(s)`)
+
+# unstacking
+fitted.percents.unstack <- pivot_longer(data = fitted.percents, cols = -mutation, names_to = "sample", values_to = "percent")
+
+
+fitted.percents.unstack <- mutate(fitted.percents.unstack, obs.or.predict = "Prediction")
+
+
+
+
+####  Observation Data
+####
+observations <- mutate(observations, mutation = all.reads$`By mutation(s)`)
+
+observed.percents.unstack <- pivot_longer(data = observations, cols = -mutation, names_to = "sample", values_to = "percent")
+
+observed.percents.unstack <- mutate(observed.percents.unstack, obs.or.predict = "Observation")
+
+
+
+
+#### Row Binding
+####
+
+
+final.percents <- rbind(fitted.percents.unstack, observed.percents.unstack)
+
+# adding experiment information
+rownames(experiment.information) <- experiment.information$entire
+final.percents <- cbind(final.percents, experiment.information[ final.percents$sample,])
+
+
+final.percents
+
+
+
+```
+
+Plotting
+
+```{r}
+all.percent.sum <- apply(all.reads[,all.hap], 1, sum)
+mutation.subsample <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][1:5]
+
+subsample <- filter(final.percents, (trtmnt.type == "Ola" | trtmnt.type == "mock") & mutation %in% mutation.subsample & !percent < 0.1)
+
+ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = mutation)) +
+  geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +
+  geom_line(data = subset(subsample, obs.or.predict == "Prediction"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +
+  theme(legend.position = "none")+
+  labs(title = "Principle Component Analysis on Olaparib Haploid Experiments", x = "Olaparib Concentration", y = "Allele Percentage") 
+
+
+
+subsample <- filter(final.percents, (trtmnt.type == "Nira" | trtmnt.type == "mock") & mutation %in% mutation.subsample & !percent < 0.1)
+
+ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = mutation)) +
+  geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +
+  geom_line(data = subset(subsample, obs.or.predict == "Prediction"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +
+  theme(legend.position = "none")+
+  labs(title = "Principle Component Analysis on Niraparib Haploid Experiments", x = "Niraparib Concentration", y = "Allele Percentage") 
+
+
+
+subsample <- filter(final.percents, (trtmnt.type == "Gy" | trtmnt.type == "unt") & mutation %in% mutation.subsample & !percent < 0.1)
+
+ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = mutation)) +
+  geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +
+  geom_line(data = subset(subsample, obs.or.predict == "Prediction"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +
+  #theme(legend.position = "none")+
+  labs(title = "Principle Component Analysis on Irradiated Haploid Experiments", x = "Radiation Amount", y = "Allele Percentage") 
+
+```
+
+
+```{r}
+
+all.percent.sum <- apply(all.reads[,all.hap], 1, sum)
+mutation.subsample <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][c(1,3, 4)]
+
+subsample <- filter(final.percents, (trtmnt.type == "Ola" | trtmnt.type == "mock") & mutation %in% mutation.subsample & !percent < 1)
+
+ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = mutation)) +
+  geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +
+  geom_line(data = subset(subsample, obs.or.predict == "Prediction"), aes(x = trtmnt.amnt, y = percent, color = mutation, shape = obs.or.predict))  +
+  labs(title = "Regressing Three Mutations", x = "Olaparib Concentration", y = "Allele Percentage") 
+
+
+
+
+all.percent.sum <- apply(all.reads[,all.hap], 1, sum)
+mutation.subsample <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][1:10]
+
+subsample <- filter(final.percents, trtmnt.type == "Nira" & mutation %in% mutation.subsample & !percent < 0.01)
+
+ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = mutation)) +
+  geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = mutation, shape = obs.or.predict))  +
+  geom_line(data = subset(subsample, obs.or.predict == "Prediction"), aes(x = trtmnt.amnt, y = percent, color = mutation, shape = obs.or.predict))  +
+  theme(legend.position = "none") 
+
+
+
+all.percent.sum <- apply(all.reads[,all.hap], 1, sum)
+mutation.subsample <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][1]
+
+subsample <- filter(final.percents, trtmnt.type == "Nira" & mutation %in% mutation.subsample & !percent < 0.01)
+
+ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = mutation)) +
+  geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +
+  geom_line(data = subset(subsample, obs.or.predict == "Prediction"), aes(x = trtmnt.amnt, y = percent, color = mutation, shape = obs.or.predict))  
+  
+
+
+
+
+all.percent.sum <- apply(all.reads[,all.dip], 1, sum)
+mutation.subsample <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][1:10]
+
+subsample <- filter(final.percents, trtmnt.type == "Ola" & mutation %in% mutation.subsample & !percent < 0.01)
+
+ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = mutation)) +
+  geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = mutation, shape = obs.or.predict))  +
+  geom_line(data = subset(subsample, obs.or.predict == "Prediction"), aes(x = trtmnt.amnt, y = percent, color = mutation, shape = obs.or.predict))  +
+  theme(legend.position = "none")
+
+
+```
+
+
+```{r}
+filter(subsample, obs.or.predict == "Observation")
+```
+
+
+
+
+```{r}
+top.vec.mut <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][1:50]
+top.mutations <- as.list(top.vec.mut)
+names(top.mutations) <- top.vec.mut
+
+
+first.50.regressions <- lapply(top.mutations, function(x){
+  
+  temp.df <- filter(final.percents, obs.or.predict == "Observation" & mutation == x)
+  
+  if(x %in% top.vec.mut[1:10]){
+    temp.df <- filter(temp.df, percent > 1)
+  }
+  
+  lm(percent ~ trtmnt.amnt + trtmnt.type, data = temp.df)
+  
+})
+
+first.50.coef <- lapply(first.50.regressions, FUN = function(x){x$coefficients[2]})
+
+plot(unlist(first.50.coef))
+
+
+plot(first.50.regressions$`No mutation`$fitted.values)
+
+first.50.regressions$`1:21d`$fitted.values
+```
+
+
+
+```{r}
+
+first.50.df <- lapply(first.50.regressions, function(x){
+  temp.df <- x$model %>% select( -percent) %>% mutate(Cell.Type = "H")
+  
+  rownames(temp.df) <- NULL
+  
+  cbind(percent = x$fitted.values, temp.df)
+})
+
+
+final.OLS <- bind_rows(first.50.df, .id = "mutation") %>% mutate(obs.or.predict = "OLS Prediction")
+```
+
+
+```{r}
+final.compare <- final.percents
+final.compare$obs.or.predict[final.compare$obs.or.predict == "Prediction"] <- "PCA Prediction"
+final.compare <- select(final.compare, -sample, -entire, -exp.ID, -data.type)
+
+# Adding OLS predictions
+final.compare <- rbind(select(final.compare, -X), final.OLS)
+final.compare
+```
+
+
+
+
+```{r}
+all.percent.sum <- apply(all.reads[,all.hap], 1, sum)
+mutation.subsample <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][1]
+
+subsample <- filter(final.compare, (trtmnt.type == "Ola" | trtmnt.type == "mock") & mutation %in% mutation.subsample & !percent < 1)
+
+
+ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) + 
+  geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) +
+  geom_line(data = subset(subsample, obs.or.predict == "PCA Prediction"), aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) + 
+  geom_line(data = subset(subsample, obs.or.predict == "OLS Prediction"), aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) +
+  facet_wrap(~mutation) +
+  labs(title = "PCA Reg. Compared to OLS in Haploid Olaparib", x = "Olaparib Concentration", y = "Allele Percentage")  +
+  theme(legend.title = element_blank())
+
+  
+
+
+
+mutation.subsample <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][c(1:4)]
+
+subsample <- filter(final.compare, (trtmnt.type == "Ola" | trtmnt.type == "mock") & mutation %in% mutation.subsample & !percent < 1)
+
+
+ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) + 
+  geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) +
+  geom_line(data = subset(subsample, obs.or.predict == "PCA Prediction"), aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) + 
+  geom_line(data = subset(subsample, obs.or.predict == "OLS Prediction"), aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) +
+  facet_wrap(~mutation, nrow = 2, ncol = 2)+
+  labs(title = "1-4th Most Common Haploid Olaparib Mutations", x = "Olaparib Concentration", y = "Allele Percentage")  +
+  theme(legend.title = element_blank())
+
+
+
+
+
+
+mutation.subsample <- all.reads$`By mutation(s)`[order(all.percent.sum, decreasing = TRUE)][c(5:8)]
+
+subsample <- filter(final.compare, (trtmnt.type == "Ola" | trtmnt.type == "mock") & mutation %in% mutation.subsample & !percent < 1)
+
+
+ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) + 
+  geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) +
+  geom_line(data = subset(subsample, obs.or.predict == "PCA Prediction"), aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) + 
+  geom_line(data = subset(subsample, obs.or.predict == "OLS Prediction"), aes(x = trtmnt.amnt, y = percent, color = obs.or.predict)) +
+  facet_wrap(~mutation, nrow = 2, ncol = 2) +
+  labs(title = "5-8th Most Common Haploid Olaparib Mutations", x = "Olaparib Concentration", y = "Allele Percentage") +
+  theme(legend.title = element_blank())
+
+  
+
+
+```
+

@@ -2,7 +2,9 @@
 title: "Data Analysis Project"
 author: "Wayne Monical"
 date: "December 10, 2019"
-output: pdf_document
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r, results = "hide", include=FALSE}

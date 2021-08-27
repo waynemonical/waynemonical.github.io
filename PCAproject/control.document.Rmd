@@ -5,6 +5,12 @@ date: "8/26/2021"
 output: html_document
 ---
 
+
+
+Notes
+It would be really good to se the pvalues of the regressions on the 1st, 2nd, etc principle components
+
+
 Libraries `readr`, `tidyverse`, 'crayon', and `kernlab` are loaded.
 ```{r, echo = FALSE, message = FALSE, warning = FALSE}
 library(readr)
@@ -15,8 +21,9 @@ library(kernlab)
 
 
 
-Data Cleaning and Load
-```{r}
+### Data Cleaning
+
+```{r, warning=FALSE, message=FALSE}
 source("data.load.and.clean.R")
 ```
 
@@ -25,56 +32,130 @@ head(all.reads[,3:9])
 ```
 
 
-(brief discussion of raw to final data and experiment information)
+The raw quantitative data in the `all.reads` data frame included specification of mutations and their total presence in counts and percents in each of thirty-seven experiments. An additional data frame, `experiment.information`, specified the exact cell type, treatment type, treatment amount, and replicate index in each experiment. A subset of the cleaned `all.reads` data frame is displayed above. It should be noted that a mutation's total absence from an experiment was encoded as a missing value, which was corrected in the data cleaning process to a zero. 
 
 
 
-(show a table)
-
-
-Function Load
+### Function Load
 ```{r}
 source('core.functions.R')
 ```
-(description of major functions, and their dependents)
+
+The framework of the functions constructed for this analysis begins with an experiment object, which is simply a list containing response variables, their regressors, and the experiment's name. In the list, these are called the `y.set`, the `x.set`, and `nametag`. The experiment object having the information of its own name is useful when iterating over lists of experiment objects.
+
+The `conduct` functions take an experiment object and add analyses to their list. For example, the `conduct.linear.pca` function adds a PCA analysis to an experiment object. The primary advantage of the experiment object is that it groups disparate analyses by subject matter, accessed via the list format. Calling a `conduct` function on an experiment object typically returns the same exact experiment object with the added analysis. Certain `conduct` functions may have dependencies that must be respected, but most `conduct` functions are independent. As such, any number of `conduct` functions can be piped together to create a new analysis.   
 
 
-Functions Applied for Analysis
+| Function | Arguments | Purpose |
+|---------|:--------:|-----------:|
+| **begin.object** | A data frame of experiments | Formats a data frame into an experiment object|
+| **conduct.linear.pca** | An experiment object | Adds PCA to an experiment object| 
+| **conduct.regression2** | An experiment object with PCA | Adds PCA regression to an experiment object | 
+| **graphic.pipeline** | An experiment object with PCA regression | Creates a data frame for ggplot2 |
+
+
+### Example
+
+A typical use of these functions is as follows. 
 ```{r}
+## Initialize object
+first.obj <- begin.object(boolean.vector = all.boolean, nametag = "all.boolean", y.data = all.reads, x.set = experiment.information)
 
-```
-
-
-First object
-```{r}
-first.obj <- begin.object(boolean.vector = all.boolean, y.data = all.reads, x.set = experiment.information)
+## Conduct Linear PCA
 first.obj.pca <- conduct.linear.pca(list.object = first.obj)
 
-plot(first.obj.pca$linear.pca)
-
-
-first.obj.reg2 <- conduct.regression2(first.obj.pca)
-summary(first.obj.reg2$lpca.regressions$`1`)
+## View screeplot of the Linear PCA
+plot(first.obj.pca$linear.pca, xlab = "Principle Component Index", main = "Scree Plot of First Experiment Object")
 ```
 
-All objects
-```{r, results= 'hide', message = FALSE, }
-all.obj <- lapply(boolean.list, FUN = function(x){begin.object(boolean.vector = x, y.data = all.reads, x.set = experiment.information)})
+
+```{r}
+## Conduct regression 
+first.obj.reg2 <- conduct.regression2(first.obj.pca)
+
+## View Regression
+summary(first.obj.reg2$lpca.regressions$`1`)
+summary(first.obj.reg2$lpca.regressions$`2`)
+```
 
 
-# it literally works
+```{r}
+first.obj.plot <- graphic.pipeline(first.obj.reg2, principle.components.used = 1:2)
+
+first.obj.plot$prediction.plotting
+```
+```{r}
+#plot.pca.regression <- function(analysis, mutation.index = 4:6, filterby){
+ analysis <- first.obj.plot
+
+ 
+  relevant.experiments <- all.reads[ , boolean.list[[analysis$nametag]] ]
+  
+
+  
+  all.percent.sum <- apply(relevant.experiments, 1, sum)
+  
+  mutation.subsample <- analysis$rowtags[order(all.percent.sum, decreasing = TRUE)][mutation.index]
+  
+  subsample <- filter(analysis$prediction.plotting, (trtmnt.type == "Ola" | trtmnt.type == "mock") & mutation %in% mutation.subsample & percent >2)
+  
+  ggplot(data = subsample, aes(x = trtmnt.amnt, y = percent, color = mutation)) +
+    geom_point(data = subset(subsample, obs.or.predict == "Observation"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +
+    geom_line(data = subset(subsample, obs.or.predict == "Prediction"), aes(x = trtmnt.amnt, y = percent, color = mutation))  +
+    #theme(legend.position = "none")+
+    labs(title = "Principle Component Analysis on Olaparib Diploid Experiments", x = "Olaparib Concentration", y = "Allele Percentage") 
+  
+#}
+
+
+plot.pca.regression(first.obj.plot, filterby = (trtmnt.type == "Ola" | trtmnt.type == "mock"))
+
+```
+
+```{r}
+all.reads[,all.boolean]
+
+filter(experiment.information, data.type == "%")
+```
+
+
+```{r}
+grpahic.pipeline(first.obj.reg2, principle.components.used = 1:2)
+```
+
+
+```{r}
+names(first.obj.reg2)
+```
+
+
+
+### Applying Pipeline to All objects
+
+
+This pipeline was used to analyze experiments in nine subsets. These subsets consisted of all experiments, all diploid experiments, all haploid experiments, and Niraparib, Olaparib, and Radiation experiments, all of which had diploid and haploid versions. The list `boolean.list` holds the information as to which experiments belong in each subset.  
+```{r}
+## Beginning all objects
+all.obj <- lapply(boolean.name.list, FUN = function(x){begin.object(boolean.vector = boolean.list[[x]], nametag = x , y.data = all.reads, x.set = experiment.information)})
+
+# Conducting linear pca on all subsets
 all.obj.lpca <- lapply(all.obj, FUN = function(x){conduct.linear.pca(x)})
+```
 
 
-# lets try to use the screeplot function
-# none of these screeplots are good except the one for all the data
+```{r, results= 'hide', message = FALSE}
+# screeplots
 lapply(all.obj.lpca, FUN = function(x){screeplot(x$linear.pca)})
 ```
 
 
+Doing all regressions
+
+```{r}
+all.obj.reg2 <- lapply(all.obj.lpca, FUN = function(z){conduct.regression2(z, pcas = 1:4)})
+```
+
 (here be the meat. The applies, etc)
-
-
 
 
 
