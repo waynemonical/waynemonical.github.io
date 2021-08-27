@@ -15,3 +15,10 @@ This is a temporary landing page to redirect to my code samples and graphic samp
 
 - Includes two graphs, one each from biological and economic analysis. 
 - Demonstrates concise work flow for graphic communication.
+
+
+### Other Links
+
+- [Resume](https://github.com/waynemonical/waynemonical.github.io/raw/main/MonicalResume.pdf) *(download)*
+- [LinkedIn](www.linkedin.com/in/wayne-monical-108273219)
+
